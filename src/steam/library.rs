@@ -1,6 +1,6 @@
 //! Loading steamclient.so and resolving its exported symbols and interface
-//! methods. Names locate IPC methods; typed code signatures check every
-//! function before it can be called.
+//! methods. Names locate IPC methods; optional typed code signatures check
+//! function bodies before they can be called.
 
 use std::ffi::{CStr, c_void};
 use std::fs;
@@ -91,10 +91,11 @@ pub(super) struct Library {
     base: usize,
     bytes: Vec<u8>,
     segments: Vec<Segment>,
+    ignore_signatures: bool,
 }
 
 impl Library {
-    pub(super) fn open(path: &Path) -> Result<Self> {
+    pub(super) fn open(path: &Path, ignore_signatures: bool) -> Result<Self> {
         let bytes = fs::read(path).with_context(|| format!("reading {}", path.display()))?;
 
         let segments = elf_segments(&bytes)?;
@@ -115,6 +116,7 @@ impl Library {
             base: 0,
             bytes,
             segments,
+            ignore_signatures,
         };
 
         // SAFETY: dladdr only inspects the loader's mapping of this address.
@@ -146,6 +148,7 @@ impl Library {
             base: 0,
             bytes: vec![],
             segments: vec![],
+            ignore_signatures: false,
         }
     }
 
@@ -207,8 +210,8 @@ impl Library {
         unsafe { self.function(table[slot], signature) }
     }
 
-    /// Check both the file and the actual code we'll call. This also rejects
-    /// symbols resolved from dependencies and a different already-loaded build.
+    /// Check both the file and the actual code we'll call when checks are enabled.
+    /// Always reject symbols outside this library's readable executable segments.
     unsafe fn function<T: Copy>(&self, address: usize, signature: &Signature<T>) -> Result<T> {
         ensure!(
             size_of::<T>() == size_of::<usize>(),
@@ -216,23 +219,33 @@ impl Library {
         );
 
         let code = self
-            .code(address, signature.size)
+            .code(
+                address,
+                if self.ignore_signatures {
+                    1
+                } else {
+                    signature.size
+                },
+            )
             .with_context(|| format!("resolving Steam {}", signature.name.to_string_lossy()))?;
 
-        signature.check(code)?;
+        if !self.ignore_signatures {
+            signature.check(code)?;
 
-        // SAFETY: The range is inside the readable executable mapping loaded
-        // from this file. Code has no runtime relocations in supported builds.
-        let loaded = unsafe { std::slice::from_raw_parts(address as *const u8, code.len()) };
+            // SAFETY: The range is inside the readable executable mapping loaded
+            // from this file. Code has no runtime relocations in supported builds.
+            let loaded = unsafe { std::slice::from_raw_parts(address as *const u8, code.len()) };
 
-        ensure!(
-            loaded == code,
-            "Steam's loaded {} differs from its file",
-            signature.name.to_string_lossy()
-        );
+            ensure!(
+                loaded == code,
+                "Steam's loaded {} differs from its file",
+                signature.name.to_string_lossy()
+            );
+        }
 
-        // SAFETY: The typed signature binds T to the reviewed ABI, and the
-        // complete loaded function body matches that signature.
+        // SAFETY: The typed signature binds T to the reviewed ABI. With checks
+        // enabled, the complete loaded function body matches that signature.
+        // With checks disabled (the default), ABI compatibility is assumed.
         Ok(unsafe { std::mem::transmute_copy(&address) })
     }
 
@@ -482,6 +495,28 @@ mod tests {
                 .contains("unsupported Steam signature for test")
         );
         assert!(signature.check(&code[..63]).is_err());
+    }
+
+    #[test]
+    fn unsafe_opt_out_skips_body_and_loaded_code_checks() {
+        let mut code = [0x90; 64];
+        let signature = Signature::<Method>::new(c"test", code.len(), Sha256::digest(code).into());
+        let address = code.as_ptr() as usize;
+        let mut library = mapped(&code);
+        library.ignore_signatures = true;
+
+        // Resolve synthetic pointers only; never call them.
+        code[63] = 0xc3;
+        assert!(unsafe { library.function(address, &signature) }.is_ok());
+        library.bytes[63] = code[63];
+        assert!(unsafe { library.function(address, &signature) }.is_ok());
+
+        // A changed function can be shorter than the reviewed body.
+        let shorter = address + 63;
+        assert!(unsafe { library.function(shorter, &signature) }.is_ok());
+        assert!(unsafe { library.function(address + 64, &signature) }.is_err());
+        library.segments[0].flags = libc::PF_R;
+        assert!(unsafe { library.function(address, &signature) }.is_err());
     }
 
     #[test]

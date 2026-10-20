@@ -33,6 +33,13 @@ const DEFAULT_PROFILE: &str = "Steam Frame Link (steamframe-link)";
     about = "Connect the Steam Frame Wireless Adapter to the headset hotspot"
 )]
 struct Cli {
+    /// Require reviewed Steam code signatures before calling private interfaces.
+    #[arg(long, global = true, conflicts_with = "ignore_signatures")]
+    check_signatures: bool,
+
+    /// Skip Steam code signature checks (the default).
+    #[arg(long, global = true, hide = true)]
+    ignore_signatures: bool,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -146,7 +153,10 @@ struct Creds {
 }
 
 fn main() -> Result<()> {
-    match Cli::parse().cmd {
+    let cli = Cli::parse();
+    let ignore_signatures = cli.ignore_signatures || !cli.check_signatures;
+
+    match cli.cmd {
         Cmd::Detect => detect(),
         Cmd::SteamInfo { steam_dir } => {
             println!("{}", steam::LibraryInfo::read(steam_dir.as_deref())?);
@@ -154,7 +164,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::SteamDevices { steam_dir } => {
-            let steam = steam::Steam::connect(steam_dir.as_deref())?;
+            let steam = steam::Steam::connect(steam_dir.as_deref(), ignore_signatures)?;
 
             for device in steam.devices()? {
                 println!(
@@ -166,7 +176,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Creds { src, reveal } => {
-            let c = resolve_creds(&src)?;
+            let c = resolve_creds(&src, ignore_signatures)?;
 
             println!("source: {}", c.origin);
             println!("ssid:   {}", c.ssid);
@@ -190,7 +200,7 @@ fn main() -> Result<()> {
         } => {
             let d = pick_dongle(target.iface.as_deref())?;
 
-            let creds = resolve_creds(&src)?;
+            let creds = resolve_creds(&src, ignore_signatures)?;
 
             let nm = nm::Nm::connect()?;
 
@@ -320,7 +330,7 @@ fn pick_dongle(iface: Option<&str>) -> Result<dongle::Dongle> {
     }
 }
 
-fn resolve_creds(src: &CredSource) -> Result<Creds> {
+fn resolve_creds(src: &CredSource, ignore_signatures: bool) -> Result<Creds> {
     if src.from_nm {
         let (ssid, psk) = nm::Nm::connect()?.read_wifi_credentials(nm::STEAM_PROFILE)?;
 
@@ -336,7 +346,7 @@ fn resolve_creds(src: &CredSource) -> Result<Creds> {
     }
 
     if src.ssid.is_none() {
-        return steam::Steam::connect(src.steam_dir.as_deref())?.credentials(
+        return steam::Steam::connect(src.steam_dir.as_deref(), ignore_signatures)?.credentials(
             src.steam_client,
             std::time::Duration::from_secs(src.timeout),
         );
@@ -463,6 +473,35 @@ fn mask(s: &str) -> String {
 mod cli_tests {
     use super::*;
     use clap::CommandFactory;
+
+    #[test]
+    fn signature_checks_require_explicit_opt_in() {
+        for command in ["steam-devices", "creds", "setup"] {
+            assert!(
+                !Cli::try_parse_from(["link", command])
+                    .unwrap()
+                    .check_signatures
+            );
+            for args in [
+                ["link", "--check-signatures", command],
+                ["link", command, "--check-signatures"],
+            ] {
+                assert!(Cli::try_parse_from(args).unwrap().check_signatures);
+            }
+            for args in [
+                ["link", "--ignore-signatures", command],
+                ["link", command, "--ignore-signatures"],
+            ] {
+                assert!(Cli::try_parse_from(args).unwrap().ignore_signatures);
+            }
+            assert!(
+                Cli::try_parse_from(
+                    ["link", command, "--check-signatures", "--ignore-signatures",]
+                )
+                .is_err()
+            );
+        }
+    }
 
     #[test]
     fn credential_sources_and_steam_options_are_unambiguous() {

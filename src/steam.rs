@@ -20,9 +20,9 @@ pub struct Steam {
 }
 
 impl Steam {
-    pub fn connect(directory: Option<&Path>) -> Result<Self> {
+    pub fn connect(directory: Option<&Path>, ignore_signatures: bool) -> Result<Self> {
         Ok(Self {
-            client: Client::connect(directory)?,
+            client: Client::connect(directory, ignore_signatures)?,
         })
     }
 
