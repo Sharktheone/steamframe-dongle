@@ -2,7 +2,10 @@
 //! exchange; we never implement Remote Play authentication or read NM secrets.
 
 mod client;
+mod info;
 mod library;
+
+pub use info::LibraryInfo;
 
 use std::path::Path;
 use std::time::{Duration, Instant};

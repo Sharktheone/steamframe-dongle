@@ -41,6 +41,12 @@ struct Cli {
 enum Cmd {
     /// List Steam Frame Wireless Adapters plugged into this machine.
     Detect,
+    /// Show the Steam library selected for IPC, its version and file hashes.
+    SteamInfo {
+        /// Steam installation directory (auto-detected by default).
+        #[arg(long)]
+        steam_dir: Option<std::path::PathBuf>,
+    },
     /// List the Remote Play clients visible to the running Steam client.
     SteamDevices {
         /// Steam installation directory (auto-detected by default).
@@ -142,6 +148,11 @@ struct Creds {
 fn main() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Detect => detect(),
+        Cmd::SteamInfo { steam_dir } => {
+            println!("{}", steam::LibraryInfo::read(steam_dir.as_deref())?);
+
+            Ok(())
+        }
         Cmd::SteamDevices { steam_dir } => {
             let steam = steam::Steam::connect(steam_dir.as_deref())?;
 
