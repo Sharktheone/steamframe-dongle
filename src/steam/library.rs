@@ -348,6 +348,10 @@ impl Library {
     }
 }
 
+pub(super) fn validate_elf(bytes: &[u8]) -> Result<()> {
+    elf_segments(bytes).map(|_| ())
+}
+
 fn elf_segments(bytes: &[u8]) -> Result<Vec<Segment>> {
     ensure!(
         bytes.get(..6) == Some(b"\x7fELF\x02\x01"),
