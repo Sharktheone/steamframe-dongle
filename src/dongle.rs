@@ -22,9 +22,11 @@ fn read_trim(p: impl AsRef<Path>) -> Option<String> {
 }
 
 fn matches_trim(p: impl AsRef<Path>, val: &str) -> bool {
-    fs::read_to_string(p).ok().map(|s| s.trim() == val).unwrap_or(false)
+    fs::read_to_string(p)
+        .ok()
+        .map(|s| s.trim() == val)
+        .unwrap_or(false)
 }
-
 
 /// Every wireless netdev whose USB parent is the Steam Frame adapter.
 pub fn find_all() -> Vec<Dongle> {
