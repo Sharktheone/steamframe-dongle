@@ -95,7 +95,6 @@ impl fmt::Display for LibraryInfo {
     }
 }
 
-
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
