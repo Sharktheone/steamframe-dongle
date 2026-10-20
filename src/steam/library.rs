@@ -370,20 +370,20 @@ fn elf_segments(bytes: &[u8]) -> Result<Vec<Segment>> {
         number(16, 2)? == 3 && number(18, 2)? == 62,
         "Steam library must be an x86_64 shared object"
     );
-    
+
     let table = number(32, 8)?;
-    
+
     let entry_size = number(54, 2)?;
-    
+
     let count = number(56, 2)?;
-    
+
     ensure!(
         entry_size >= 56 && count <= 1024,
         "invalid Steam ELF program headers"
     );
-    
+
     let mut segments = Vec::new();
-    
+
     for index in 0..count {
         let header = table
             .checked_add(

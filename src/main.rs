@@ -19,12 +19,11 @@ mod steam;
 
 use std::borrow::Cow;
 use std::io::{BufRead, IsTerminal, Write};
-use std::{iter, process};
 use std::process::Command;
+use std::{iter, process};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args, Parser, Subcommand};
-use libc::write;
 
 const DEFAULT_PROFILE: &str = "Steam Frame Link (steamframe-link)";
 
@@ -162,7 +161,11 @@ fn main() -> Result<()> {
             println!("ssid:   {}", c.ssid);
             println!(
                 "psk:    {}",
-                if reveal { Cow::Borrowed(&c.psk) } else { Cow::Owned(mask(&c.psk)) }
+                if reveal {
+                    Cow::Borrowed(&c.psk)
+                } else {
+                    Cow::Owned(mask(&c.psk))
+                }
             );
 
             Ok(())
@@ -438,7 +441,7 @@ fn mask(s: &str) -> String {
 
     buf.extend(iter::repeat_n('*', n - 4));
 
-    buf.extend(s.chars().skip(n-2));
+    buf.extend(s.chars().skip(n - 2));
 
     let _ = write!(buf, "({n} chars)");
 

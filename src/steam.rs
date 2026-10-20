@@ -57,8 +57,12 @@ impl Steam {
 
                 // Steam writes these keys when the LAN response arrives, before
                 // it posts the pairing result. Never use cached keys on failure.
-                let ssid = self.client.config_string(c"streaming_v2\\WifiAPPairedSSID")?;
-                let psk = self.client.config_string(c"streaming_v2\\WifiAPPairedPassword")?;
+                let ssid = self
+                    .client
+                    .config_string(c"streaming_v2\\WifiAPPairedSSID")?;
+                let psk = self
+                    .client
+                    .config_string(c"streaming_v2\\WifiAPPairedPassword")?;
 
                 ensure!(
                     !ssid.is_empty() && ssid.len() <= 32,
@@ -106,7 +110,10 @@ fn select_device(devices: &[Device], requested: Option<u64>) -> Result<&Device> 
         return Ok(device);
     }
 
-    let candidates = devices.iter().filter(|d| d.local && d.can_pair).collect::<Vec<_>>();
+    let candidates = devices
+        .iter()
+        .filter(|d| d.local && d.can_pair)
+        .collect::<Vec<_>>();
 
     match candidates.as_slice() {
         [device] => Ok(device),
