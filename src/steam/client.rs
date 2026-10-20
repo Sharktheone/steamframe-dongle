@@ -3,7 +3,7 @@
 //! ABI reference: m4dEngi/open-steamworks, IClientEngine and
 //! IClientRemoteClientManager. The scalar/string ABI and pairing callback were
 //! also checked against the installed Linux steamclient.so. Private interfaces
-//! can change: verify every function's code signature before use.
+//! can change: code signature checks are opt-in with --check-signatures.
 
 mod signatures;
 
@@ -76,13 +76,19 @@ pub(super) struct Client {
 }
 
 impl Client {
-    pub(super) fn connect(directory: Option<&Path>) -> Result<Self> {
+    pub(super) fn connect(directory: Option<&Path>, ignore_signatures: bool) -> Result<Self> {
         ensure!(
             cfg!(all(target_os = "linux", target_arch = "x86_64")),
             "Steam IPC currently supports x86_64 Linux"
         );
 
-        let library = Library::open(&library::find(directory)?)?;
+        if ignore_signatures {
+            eprintln!(
+                "Warning: Steam code signature checks are disabled; incompatible interfaces may crash."
+            );
+        }
+
+        let library = Library::open(&library::find(directory)?, ignore_signatures)?;
 
         // SAFETY: CreateInterface is Steam's exported C factory. The versioned
         // engine owns the returned object for the lifetime of the library.
