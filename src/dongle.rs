@@ -28,6 +28,37 @@ fn matches_trim(p: impl AsRef<Path>, val: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// An explicitly selected wireless interface, including ordinary PCI/USB radios.
+pub fn by_iface(iface: &str) -> anyhow::Result<Dongle> {
+    anyhow::ensure!(
+        !iface.is_empty() && iface != "." && iface != ".." && !iface.contains('/'),
+        "invalid network interface name"
+    );
+
+    let net = Path::new("/sys/class/net").join(iface);
+
+    anyhow::ensure!(
+        net.join("phy80211").exists(),
+        "{iface} is not a wireless interface"
+    );
+
+    let mac = read_trim(net.join("address"))
+        .ok_or_else(|| anyhow::anyhow!("cannot read the MAC address of {iface}"))?;
+
+    parse_mac(&mac)?;
+
+    let driver = fs::read_link(net.join("device/driver"))
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
+
+    Ok(Dongle {
+        iface: iface.to_owned(),
+        mac,
+        serial: None,
+        driver,
+    })
+}
+
 /// Every wireless netdev whose USB parent is the Steam Frame adapter.
 pub fn find_all() -> Vec<Dongle> {
     let mut out = Vec::new();
@@ -38,6 +69,7 @@ pub fn find_all() -> Vec<Dongle> {
 
     for entry in entries.flatten() {
         let iface = entry.file_name().to_string_lossy().into_owned();
+
         let net = entry.path();
 
         //TODO: validate this is the same on all machines!
@@ -83,6 +115,8 @@ pub fn parse_mac(mac: &str) -> anyhow::Result<Vec<u8>> {
         .split(':')
         .map(|b| u8::from_str_radix(b, 16))
         .collect::<Result<Vec<_>, _>>()?;
+
     anyhow::ensure!(bytes.len() == 6, "invalid MAC address {mac}");
+
     Ok(bytes)
 }
