@@ -1,4 +1,4 @@
-# I reverse engineered the Steam Frame's wireless adapter
+# The Steam Frame's wireless adapter isn't what you think
 
 Are you like me and thought that the Adapter was the Router? Well, no. The adapter is just a WiFi 6E dongle that connects to the headset's own hidden hotspot.
 
